@@ -16,6 +16,10 @@ namespace regularizer {
 
 void TopicSegmentationPtdwAgent::Apply(int item_index, int inner_iter,
                                        ::artm::utility::LocalPhiMatrix<float>* ptdw) const {
+  bool transform = config_.transform();
+  if (transform && inner_iter < 10) {
+    return;
+  }
   int local_token_size = ptdw->no_rows();
   int num_topics = ptdw->no_columns();
   std::vector<double> background_probability(local_token_size, 0.0);
@@ -33,6 +37,7 @@ void TopicSegmentationPtdwAgent::Apply(int item_index, int inner_iter,
   }
 
   int h = config_.window();
+  double tau = tau_;
   double threshold_topic_change = config_.threshold();
   ::artm::utility::DenseMatrix<float> copy_ptdw(*ptdw);
   std::vector<double> left_distribution(num_topics, 0.0);
@@ -44,11 +49,12 @@ void TopicSegmentationPtdwAgent::Apply(int item_index, int inner_iter,
   int main_topic = std::distance(&(*ptdw)(0, 0), std::max_element(&(*ptdw)(0, 0), &(*ptdw)(0, num_topics)));  //NOLINT
   for (int k = 0; k < num_topics; ++k) {
     if (k == main_topic) {
-      (*ptdw)(0, k) = 1;
+      (*ptdw)(0, k) = tau * 1 + (1 - tau) * (*ptdw)(0, k);
     } else {
-      (*ptdw)(0, k) = 0;
+      (*ptdw)(0, k) = tau * 0 + (1 - tau) * (*ptdw)(0, k);
     }
   }
+
   for (int i = 0; i < h && i < local_token_size; ++i) {
     for (int k = 0; k < num_topics; ++k) {
       right_distribution[k] += copy_ptdw(i, k) * (1 - background_probability[i]);
@@ -84,16 +90,25 @@ void TopicSegmentationPtdwAgent::Apply(int item_index, int inner_iter,
     double rl = right_distribution[l_topic];
     double rr = right_distribution[r_topic];
     double lr =  left_distribution[r_topic];
-    changes_topic = ((ll / left_weights  - rl / right_weights) / 2 +
+    //assume that a segment is of length of minimum 2 words
+    if (changes_topic) {
+    	main_topic = r_topic;
+    	changes_topic = false;
+    }
+    else {
+    	changes_topic = ((ll / left_weights  - rl / right_weights) / 2 +
+                     (rr / right_weights - lr / left_weights)  / 2 > threshold_topic_change);
+    }
+    /*changes_topic = ((ll / left_weights  - rl / right_weights) / 2 +
                      (rr / right_weights - lr / left_weights)  / 2 > threshold_topic_change);
     if (changes_topic) {
       main_topic = r_topic;
-    }
+    }*/
     for (int k = 0; k < num_topics; ++k) {
       if (k == main_topic) {
-        (*ptdw)(i, k) = 1;
+        (*ptdw)(i, k) = tau * 1 + (1 - tau) * (*ptdw)(i, k);
       } else {
-        (*ptdw)(i, k) = 0;
+        (*ptdw)(i, k) = tau * 0 + (1 - tau) * (*ptdw)(i, k);
       }
     }
   }

@@ -185,6 +185,7 @@ message HierarchySparsingThetaConfig {
 // Represents a configuration of a Topic Segmentation regularizer
 message TopicSegmentationPtdwConfig {
   repeated string background_topic_names = 1;
+  optional bool transform = 2 [default = false];
   optional int32 window = 3 [default = 10];
   optional double threshold = 4 [default = 0.5];
 }
